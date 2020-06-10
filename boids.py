@@ -2,7 +2,7 @@ import random
 import sys
 import pygame
 import time
-from math import cos, sin, tan, atan, sqrt, radians, degrees
+from math import cos, sin, tan, acos, atan, sqrt, radians, degrees
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -17,9 +17,9 @@ BOID_SIZE = 5
 
 class Boid:
     
-    PERSONAL_SPACE = 15
+    PERSONAL_SPACE = 25
     VINCINITY = 75
-    ANGLE_INCREMENT = 5
+    ANGLE_INCREMENT = 4
     DISTANCE = 1.5
     
     def __init__(self,x,y):
@@ -37,9 +37,9 @@ class Boid:
         self.x = pos[0]
         self.y = pos[1]
     
-    def move(self):
+    def move(self, population):
         # print(self.angle)   
-        self.choose_next_move([])
+        self.choose_next_move(self.boids_in_vincinity(population))
         self.angle = self.next_move
         self.keep_angle_bounds()
         self.x += Boid.DISTANCE * cos(radians(self.angle))
@@ -47,7 +47,25 @@ class Boid:
         self.resolve_oob()
         
     
-    def choose_next_move(self, neary_boids):           
+    def choose_next_move(self, nearby_boids):   
+        
+        nb_neighbors = len(nearby_boids)
+        if nb_neighbors > 0:
+            mean_angle = sum([b.angle for b in nearby_boids])/nb_neighbors
+            avg_x = sum([b.x for b in nearby_boids])/nb_neighbors
+            avg_y = sum([b.y for b in nearby_boids])/nb_neighbors
+            too_close = self.boids_too_close(nearby_boids)
+        
+            if(len(too_close) > 0):
+                avg_boid_x = sum([b.x for b in too_close])/len(too_close)
+                avg_boid_y = sum([b.y for b in too_close])/len(too_close)
+                if self.to_my_left([avg_boid_x, avg_boid_y]):
+                    print("It's to my left")
+                    self.choose_right()
+                else:
+                    print("It's to my right")
+                    self.choose_left()
+        # Avoiding walls        
         if self.y < Boid.VINCINITY: # Near Top
                 self.choose_right() if self.to_my_left("TOP") else self.choose_left()
         if wsize - self.y < Boid.VINCINITY:   # Near Bottom
@@ -56,6 +74,7 @@ class Boid:
                 self.choose_right() if self.to_my_left("LEFT") else self.choose_left()
         if wsize - self.x < Boid.VINCINITY:   # Near Right
                 self.choose_right() if self.to_my_left("RIGHT") else self.choose_left()
+                
         #print(self.position)
         # print(self.angle)
         return
@@ -79,7 +98,14 @@ class Boid:
             return self.angle < 0
         if item=="RIGHT":
             return self.angle > 0
-    
+            
+        if isinstance(item, list):
+            vec_to_pos = [self.x - item[0], self.y - item[1]]
+            dir_vec = [cos(radians(self.angle)), sin(radians(self.angle))]
+            dot = dir_vec[0]*vec_to_pos[0] + dir_vec[1]*vec_to_pos[1]
+            det = dir_vec[0]*vec_to_pos[1] + dir_vec[1]*vec_to_pos[0]
+            angle = atan(det/dot)
+            return angle > 0
     def choose_left(self):
         self.next_move = self.angle - Boid.ANGLE_INCREMENT
         
@@ -96,7 +122,10 @@ class Boid:
         return ((self.x - boid.x)**2 + (self.y - boid.y)**2)**0.5
     
     def boids_in_vincinity(self, boids):
-        return [b for b in boids if self.distance_from(b) <= Boid.VINCINITY and b is not self]      
+        return [b for b in boids if self.distance_from(b) <= Boid.VINCINITY and b is not self]
+    
+    def boids_too_close(self, boids):
+        return [b for b in boids if self.distance_from(b) <= Boid.PERSONAL_SPACE and b is not self]
         
 
 def pg_init():
@@ -111,7 +140,7 @@ def run(nb_boids):
     clock = pygame.time.Clock()
     screen = pg_init()
     
-    boids = [Boid(400,400) for x in range(nb_boids)]  # populate here
+    boids = [Boid(random.randint(200,600), random.randint(200,600)) for x in range(nb_boids)]  # populate here
     
     while keep_going:
         # Event handling
@@ -120,7 +149,7 @@ def run(nb_boids):
                 keep_going = False
         
         for boid in boids:
-            boid.move()
+            boid.move(boids)
         
         screen.fill(BLACK)
         for boid in boids:
